@@ -24,7 +24,7 @@ furuta-pendulum/
 │   │   ├── motor_model.py          # DC motor voltage-to-torque model
 │   │   └── unified_nmpc_controller.py
 │   └── results/
-│       ├── Figure_1.png
+│       ├── state_variation_with_time.png
 │       └── inverted_pendulum_stabilization.mp4
 ├── requirements.txt
 └── README.md
