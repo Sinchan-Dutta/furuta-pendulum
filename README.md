@@ -1,49 +1,40 @@
-# Furuta Pendulum: From Swing-Up + LQR to Constrained Nonlinear MPC with EKF State Estimation
+# Furuta pendulum control
 
-This repository documents the development of a control stack for a Furuta Pendulum (rotary inverted pendulum). It contains two tracks:
+Two simulation implementations of rotary inverted pendulum swing-up and upright stabilization. The Python implementation uses constrained nonlinear model predictive control (NMPC) with either full-state feedback or an extended Kalman filter (EKF). The MATLAB implementation uses energy-based swing-up and LQR on a five-state model with motor current.
 
-- **MATLAB**: a classical switched controller, with an energy-based swing-up followed by an LQR stabilizer, on a plant that includes the full DC motor electrical dynamics.
-- **Python**: a unified Nonlinear Model Predictive Controller (NMPC) built with CasADi and IPOPT, extended to a closed loop with noisy sensors in which the NMPC acts on the state estimate of an Extended Kalman Filter (EKF).
+## Results at a glance
 
-The project was developed as part of the Controls and Systems course (some developments were made later), with an emphasis on physically realistic modeling (a DC motor actuator model, voltage limits, explicit state constraints, sensor noise and actuator latency) rather than a purely textbook simulation.
+| Simulation | What to look for | Output |
+| --- | --- | --- |
+| Python NMPC, full-state feedback | Swing-up from hanging and upright balancing under a ±4 V limit | [State and voltage traces](python/results/nmpc_results_without_noise.png) · [Animation](python/results/nmpc_closed_loop.mp4) |
+| Python NMPC with EKF | Recovery from a +0.3 rad perturbation at 2.5 s with noisy measurements and one-sample actuator latency | [Closed-loop traces](python/results/nmpc_results_ekf.png) · [EKF traces](python/results/nmpc_results_with_noise.png) · [Animation](python/results/nmpc_closed_loop_ekf.mp4) |
+| MATLAB swing-up and LQR | Swing-up, transition to LQR near upright, and motor-current response | [State and voltage traces](matlab/results/state_variation_with_time.png) · [Animation](matlab/results/furuta_motor.mp4) |
 
-**Note on the two implementations**: the MATLAB and Python controllers were developed somewhat independently rather than as a single linear progression. The Python line (`python/`) is the primary, original line of development, including the parameter sourcing, the constrained optimal control formulation, and the noise and estimation extensions. The MATLAB controller (`matlab/`) is a separate reference exploration of a more classical architecture, with the actuator modeled in more electrical detail (armature inductance and motor current as an explicit fifth state, rather than the quasi-static voltage-to-torque relationship used in Python). It is included as a point of comparison, not as an earlier version of the Python implementation. The two use different physical and actuator parameters (see "Differences between the MATLAB and Python tracks").
+![Furuta pendulum state and voltage traces for the NMPC and EKF simulation](python/results/nmpc_results_ekf.png)
 
-## Project structure
+These plots come from simulations. The Python experiment uses a matched plant and prediction model, with noisy measurements of both angles and angular velocities. The two tracks use different plant parameters and actuator models, so their plots illustrate the controller architectures under their respective setups.
 
-```
-furuta-pendulum/
-├── docs/
-│   └── pendulum_dynamics.pdf             # Handwritten derivation of the dynamics, linearization and motor model
-├── matlab/
-│   ├── src/
-│   │   └── swingup_lqr_controller.m
-│   └── results/
-│       ├── furuta_motor.mp4
-│       └── state_variation_with_time.png
-├── python/
-│   ├── src/
-│   │   ├── dynamics.py                   # CasADi symbolic nonlinear EOM + RK4 integrator
-│   │   ├── motor_model.py                # DC motor voltage-to-torque model
-│   │   ├── noise_models.py               # Gaussian sensor noise model
-│   │   ├── ekf.py                        # Extended Kalman Filter
-│   │   ├── unified_nmpc_without_noise.py # NMPC with perfect state feedback
-│   │   └── unified_nmpc_with_noise.py    # NMPC + noisy sensors + EKF
-│   └── results/
-│       ├── nmpc_closed_loop.mp4
-│       ├── nmpc_results_without_noise.png
-│       ├── nmpc_closed_loop_ekf.mp4
-│       ├── nmpc_results_ekf.png
-│       └── nmpc_results_with_noise.png
-├── requirements.txt
-└── README.md
+## Quick start
+
+From the repository root, install the [Python dependencies](requirements.txt) and run either simulation:
+
+```sh
+python -m pip install -r requirements.txt
+cd python/src
+python unified_nmpc_without_noise.py
+python unified_nmpc_with_noise.py
 ```
 
-## Background
+The scripts write PNG plots and MP4 animations to the working directory. For MATLAB, open and run [swingup_lqr_controller.m](matlab/src/swingup_lqr_controller.m). The script plots state trajectories and writes the animation to the working directory. It uses `yline` (R2018b or later) and `wrapToPi` from Mapping Toolbox.
 
-A Furuta Pendulum consists of a horizontal arm, driven by a single motor at its base, with an unactuated pendulum rod attached to the far end of the arm. The control objective is to swing the pendulum up from its hanging-down rest position and stabilize it in the inverted (upright) position, using only the single arm-side actuator. Since the pendulum has no actuator of its own, it can only be driven indirectly, through the dynamic coupling between the arm's rotation and the pendulum's swing.
+## Implementation
 
-This system is a standard benchmark in nonlinear and underactuated control because it captures, in a small and analyzable package, many challenges found in more complex underactuated systems: a large-angle, genuinely nonlinear swing-up maneuver, followed by precision stabilization at an unstable equilibrium, all while respecting real actuator limits.
+- [Dynamics derivation and actuator models](docs/pendulum_dynamics.pdf)
+- [Symbolic nonlinear dynamics and RK4 integrator](python/src/dynamics.py)
+- [DC-motor voltage-to-torque model](python/src/motor_model.py)
+- [Full-state NMPC](python/src/unified_nmpc_without_noise.py) and [NMPC with EKF](python/src/unified_nmpc_with_noise.py)
+- [Sensor noise model](python/src/noise_models.py) and [EKF implementation](python/src/ekf.py)
+- [MATLAB swing-up and LQR](matlab/src/swingup_lqr_controller.m)
 
 ## Physical model
 
@@ -173,53 +164,9 @@ The two implementations are not directly interchangeable and should not be compa
 | Sensing                 | Full state, including motor current, assumed known                                                                                | Perfect state feedback, or noisy measurements with EKF state estimation                                                                                 |
 | Simulation              | Continuous-time (`ode45`), 6 s, controller evaluated inside the ODE                                                               | Discrete-time (RK4, dt = 0.025 s), 5 s, one control update per step                                                                                     |
 
-Because of these differences, the results in `matlab/results/` and `python/results/` come from two different physical systems, not the same plant under two control strategies. They are included together to compare control *architectures*, not to give a strict apples-to-apples numerical comparison.
+## Limitations
 
-## Results
-
-### MATLAB (`matlab/results/`)
-
-- **`state_variation_with_time.png`**: the pendulum swings up and settles at the upright position in roughly 2.5 to 3 s, after which the arm returns slowly towards zero. The motor current peaks at about 6 A during the final swing, and the voltage panel shows the commanded voltage in both modes, limited to ±24 V. The pendulum angle settles near −π, which is the same physical position as the dashed π reference line (the state angle is not wrapped).
-- **`furuta_motor.mp4`**: 3D animation of the closed-loop response.
-
-### Python (`python/results/`)
-
-- **`nmpc_results_without_noise.png`, `nmpc_closed_loop.mp4`**: NMPC with perfect state feedback. The pendulum swings up and settles at the upright position (φ ≈ π) in roughly one second. The voltage sits at its ±4 V limit during the swing-up and then drops to small corrective commands.
-- **`nmpc_results_with_noise.png`**: EKF validation, showing the true state, the noisy measurement and the EKF estimate for all four states. The estimate follows the true state closely, with a small lag at the peaks of the velocity signals. The measured angles appear near +π while the true angle is near −π because measurements are wrapped to [−π, π] and the plant state is continuous; they represent the same physical angle.
-- **`nmpc_results_ekf.png`, `nmpc_closed_loop_ekf.mp4`**: the closed-loop trajectory and animation when the NMPC runs on the EKF estimate. The pendulum is held upright and recovers from the +0.3 rad disturbance at t = 2.5 s.
-
-## Known issues
-
-- **MATLAB toolbox dependency**: `wrapToPi` and `deg2rad` come from the Mapping Toolbox in older MATLAB releases.
-- **MATLAB switching**: the controller switches hard between swing-up and LQR at 40° from upright, inside the ODE function, which makes the right-hand side discontinuous at the switching instant.
-
-## Current limitations
-
-- All four states, including the velocities, are measured directly in the Python EKF (`H = I`). A real encoder-based setup measures only the angles, so estimating the velocities from angle measurements alone is the natural next step.
-- The Python plant and the controller's model share the same parameters, so robustness to parameter mismatch is not tested.
-- The only disturbance is a single step on φ, and actuator latency is fixed at one sample.
-- The MATLAB controller has not been tested with noise or constraints on the arm angle.
-- Everything is simulation; nothing has been run on hardware.
-
-## Requirements
-
-**Python**: see `requirements.txt` (CasADi with the bundled IPOPT solver, NumPy, Matplotlib, and `imageio_ffmpeg`, which Matplotlib uses to write the `.mp4` animations).
-
-```
-pip install -r requirements.txt
-```
-
-**MATLAB**: base MATLAB with `yline` support (R2018b or later); `wrapToPi` and `deg2rad` require the Mapping Toolbox in older releases.
-
-## Running
-
-**Python**, from `python/src/`:
-
-```
-python unified_nmpc_without_noise.py    # NMPC with perfect state feedback
-python unified_nmpc_with_noise.py       # NMPC + noisy sensors + EKF
-```
-
-Each script runs the closed loop, writes its animation (`.mp4`) and plots (`.png`) to the current directory, and shows the figures. The files in `python/results/` were produced this way.
-
-**MATLAB**: open `matlab/src/swingup_lqr_controller.m` and run it. It prints the controllability check and the LQR gains, plots the state trajectories, and animates the pendulum while writing `furuta_motor.mp4` to the current folder.
+- The Python EKF receives noisy measurements of all four states. Estimation from angle-only measurements remains untested.
+- The Python disturbance experiment uses a single angle perturbation, a fixed one-sample latency and matched model parameters.
+- The MATLAB simulation has full-state feedback and uses a hard mode switch inside the ODE function.
+- Both implementations were evaluated in simulation.
