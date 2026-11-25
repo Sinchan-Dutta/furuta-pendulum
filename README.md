@@ -1,4 +1,4 @@
-# Furuta pendulum control
+# Furuta Pendulum: Nonlinear MPC and State Estimation
 
 Two simulation implementations of rotary inverted pendulum swing-up and upright stabilization. The Python implementation uses constrained nonlinear model predictive control (NMPC) with either full-state feedback or an extended Kalman filter (EKF). The MATLAB implementation uses energy-based swing-up and LQR on a five-state model with motor current.
 
@@ -12,7 +12,7 @@ Two simulation implementations of rotary inverted pendulum swing-up and upright 
 
 ![Furuta pendulum state and voltage traces for the NMPC and EKF simulation](python/results/nmpc_results_ekf.png)
 
-These plots come from simulations. The Python experiment uses a matched plant and prediction model, with noisy measurements of both angles and angular velocities. The two tracks use different plant parameters and actuator models, so their plots illustrate the controller architectures under their respective setups.
+The Python and MATLAB runs use different plant parameters and actuator models. The [setup table](#simulation-setups) shows how to interpret the results.
 
 ## Quick start
 
@@ -116,7 +116,7 @@ At every step the controller solves, over a horizon of N = 20 steps at dt = 0.02
 
 **Solver:** IPOPT through CasADi, built once and reused, with the initial state as a parameter. Warm starting is enabled, with at most 50 iterations and a tolerance of 1e-4 for speed. Only the first voltage of each solution is applied (receding horizon). The solver is warm-started from the previous solution; the noiseless run uses a swing-up trajectory as the first guess, the noisy run starts from zeros.
 
-Unlike the MATLAB controller, this one does not switch between separate swing-up and stabilization laws: a single optimization discovers both the energy-pumping swing-up and the final stabilizing approach as one continuous trajectory under the same constraints.
+In Python, one receding-horizon optimization handles both swing-up and upright stabilization.
 
 ## Sensor noise model
 
@@ -147,11 +147,9 @@ Unlike the MATLAB controller, this one does not switch between separate swing-up
 3. The NMPC solves using the **EKF estimate**, never the true state.
 4. The first voltage is applied to the true plant with **one step of actuator latency** (the previous command is the one that acts).
 
-The simulation runs 200 steps (5 s). The plant starts hanging at rest, with the EKF initialized at the true state, and a disturbance of +0.3 rad is injected on φ at step 100 (t = 2.5 s) to test recovery. The plant and the controller's internal model use the same parameters, so there is no model mismatch in this experiment.
+The 5 s simulation starts with the pendulum hanging at rest and the EKF initialized at the simulated state. A +0.3 rad perturbation is added to the pendulum angle at step 100.
 
-## Differences between the MATLAB and Python tracks
-
-The two implementations are not directly interchangeable and should not be compared as before/after versions of the same system.
+## Simulation setups
 
 |                         | MATLAB (`matlab/src/swingup_lqr_controller.m`)                                                                                    | Python (`python/src/`)                                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -164,9 +162,6 @@ The two implementations are not directly interchangeable and should not be compa
 | Sensing                 | Full state, including motor current, assumed known                                                                                | Perfect state feedback, or noisy measurements with EKF state estimation                                                                                 |
 | Simulation              | Continuous-time (`ode45`), 6 s, controller evaluated inside the ODE                                                               | Discrete-time (RK4, dt = 0.025 s), 5 s, one control update per step                                                                                     |
 
-## Limitations
+## Scope of validation
 
-- The Python EKF receives noisy measurements of all four states. Estimation from angle-only measurements remains untested.
-- The Python disturbance experiment uses a single angle perturbation, a fixed one-sample latency and matched model parameters.
-- The MATLAB simulation has full-state feedback and uses a hard mode switch inside the ODE function.
-- Both implementations were evaluated in simulation.
+The results are from simulation. The Python EKF receives noisy measurements of angles and angular velocities, so the experiment leaves angle-only estimation open. The disturbance run uses a matched prediction model, a fixed one-sample delay and one injected angle perturbation. The MATLAB controller assumes full-state feedback and switches modes inside the ODE function.
